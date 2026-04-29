@@ -40,6 +40,12 @@ def build_experiment_plan(
             if objective_name is None:
                 objective_name = "mse"
 
+        elif model_name == "ridge":
+            if feature_set_name == "none":
+                continue  # Ridge bez cech nie ma sensu
+            if objective_name is None:
+                objective_name = "mse"
+
         config = ExperimentConfig(
             asset=asset,
             data_path=data_paths[asset],

@@ -15,7 +15,8 @@ if __name__ == "__main__":
         assets=["SPY", "EURUSD", "XAUUSD"],
         tasks=["regression_return"],
         horizons=[1, 3, 5],
-        model_names=["naive", "historical_mean", "xgboost"],
+        #model_names=["naive", "historical_mean", "xgboost"],
+        model_names=["ridge"], #testowo tylko Ridge
         validation_name="walk_forward_expanding",
         min_train_size=1260,
         test_size=1,

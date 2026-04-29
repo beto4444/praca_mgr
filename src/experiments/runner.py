@@ -14,6 +14,7 @@ from src.models.naive_model import NaiveModel
 from src.features.feature_builder import build_features, finalize_feature_dataset
 from src.models.xgboost_model import XGBoostModel
 from src.models.historical_mean_model import HistoricalMeanModel
+from src.models.ridge_model import RidgeModel
 
 METRIC_KEY_COLUMNS = [
     "run_id",
@@ -87,6 +88,9 @@ def build_model(config: ExperimentConfig):
 
     if config.model_name == "historical_mean":
         return HistoricalMeanModel()
+
+    if config.model_name == "ridge":
+        return RidgeModel()
 
     raise ValueError(f"Nieznany model: {config.model_name}")
 

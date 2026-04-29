@@ -24,6 +24,7 @@ MODEL_CODES = {
     "arima": "ARI",
     "tcn": "TCN",
     "historical_mean": "HME",
+    "ridge": "RID",
 }
 
 VALIDATION_CODES = {
