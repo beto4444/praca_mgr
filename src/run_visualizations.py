@@ -12,8 +12,9 @@ from src.visualization.metrics_plots import (
 )
 from src.visualization.target_plots import (
     plot_target_stat_scatter_for_historical_mean,
+    plot_target_stat_scatter_all_models,
 )
-
+from src.visualization.summary_tables import export_all_summary_tables
 
 def build_visualization_run_dir(base_dir: str = "results/plots") -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -177,7 +178,17 @@ if __name__ == "__main__":
         top_n=8,
         bottom_n=0,
     )
-
+    plot_metric_scatter(
+        metrics_path=metrics_path,
+        x_col="mse",
+        y_col="directional_accuracy",
+        output_filename="scatter_mse_vs_directional_accuracy.png",
+        title="Directional Accuracy vs MSE",
+        output_dir=str(output_dir),
+        annotate_mode="extremes_xy",
+        top_n=6,
+        bottom_n=6,
+    )
     # Powiązanie stats targetu z wynikiem historical_mean
     plot_target_stat_scatter_for_historical_mean(
         stats_path=dataset_stats_path,
@@ -198,7 +209,32 @@ if __name__ == "__main__":
         title="HistoricalMean: directional_accuracy vs pct_positive",
         output_dir=str(output_dir),
     )
+    # Powiązanie stats targetu z wynikami wszystkich modeli
+    plot_target_stat_scatter_all_models(
+        stats_path=dataset_stats_path,
+        metrics_path=metrics_path,
+        x_col="mean_y_true",
+        y_col="pseudo_sharpe",
+        output_filename="scatter_mean_y_true_vs_pseudo_sharpe_all_models.png",
+        title="All models: pseudo_sharpe vs mean_y_true",
+        output_dir=str(output_dir),
+        annotate_mode="top_bottom",
+        top_n=8,
+        bottom_n=5,
+    )
 
+    plot_target_stat_scatter_all_models(
+        stats_path=dataset_stats_path,
+        metrics_path=metrics_path,
+        x_col="pct_positive",
+        y_col="directional_accuracy",
+        output_filename="scatter_pct_positive_vs_da_all_models.png",
+        title="All models: directional_accuracy vs pct_positive",
+        output_dir=str(output_dir),
+        annotate_mode="top_bottom",
+        top_n=8,
+        bottom_n=5,
+    )
     # Tabelki najlepszych modeli
     export_best_models_table(
         metrics_path=metrics_path,
@@ -227,6 +263,15 @@ if __name__ == "__main__":
         output_csv=str(output_dir / "best_by_mse.csv"),
         maximize=False,
     )
+    summary_paths = export_all_summary_tables(
+        metrics_path=metrics_path,
+        dataset_stats_path=dataset_stats_path,
+        output_dir=str(output_dir),
+        keep_latest_only=True,
+    )
 
+    print("Tabele podsumowujące:")
+    for path in summary_paths:
+        print(f" - {path}")
     print(f"Wizualizacje i tabelki zapisane do: {output_dir}")
     print(f"Metadata zapisane do: {output_dir / 'metadata.json'}")

@@ -8,5 +8,6 @@ dependencies = [
     "eodhd>=1.0.32",
     "jupyterlab>=4.5.1",
     "scikit-learn>=1.8.0",
+    "statsmodels>=0.14.6",
     "xgboost>=3.2.0",
 ]

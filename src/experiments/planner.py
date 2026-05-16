@@ -5,6 +5,25 @@ from typing import Optional
 
 from src.experiments.config import ExperimentConfig
 
+def is_valid_config(
+    model_name: str,
+    feature_set_name: str,
+    objective_name: str | None,
+) -> bool:
+    benchmark_models = {"naive", "historical_mean"}
+    feature_models = {"ridge", "xgboost"}
+    classical_no_feature_models = {"arima"}
+
+    if model_name in benchmark_models:
+        return feature_set_name == "none" and objective_name is None
+
+    if model_name in classical_no_feature_models:
+        return feature_set_name == "none" and objective_name is None
+
+    if model_name in feature_models:
+        return feature_set_name != "none" and objective_name == "mse"
+
+    return True
 
 def build_experiment_plan(
     assets: list[str],
@@ -29,22 +48,8 @@ def build_experiment_plan(
         feature_set_names,
         objective_names,
     ):
-        # Normalizacja kombinacji model-specyficznych
-        if model_name in {"naive", "historical_mean"}:
-            feature_set_name = "none"
-            objective_name = None
-
-        elif model_name == "xgboost":
-            if feature_set_name == "none":
-                continue  # XGBoost bez cech nie ma sensu
-            if objective_name is None:
-                objective_name = "mse"
-
-        elif model_name == "ridge":
-            if feature_set_name == "none":
-                continue  # Ridge bez cech nie ma sensu
-            if objective_name is None:
-                objective_name = "mse"
+        if not is_valid_config(model_name, feature_set_name, objective_name):
+            continue
 
         config = ExperimentConfig(
             asset=asset,

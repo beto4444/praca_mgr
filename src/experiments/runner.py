@@ -15,6 +15,7 @@ from src.features.feature_builder import build_features, finalize_feature_datase
 from src.models.xgboost_model import XGBoostModel
 from src.models.historical_mean_model import HistoricalMeanModel
 from src.models.ridge_model import RidgeModel
+from src.models.arima_model import ARIMAModel
 
 METRIC_KEY_COLUMNS = [
     "run_id",
@@ -92,6 +93,9 @@ def build_model(config: ExperimentConfig):
     if config.model_name == "ridge":
         return RidgeModel()
 
+    if config.model_name == "arima":
+        return ARIMAModel(order=(1, 0, 1), horizon=config.horizon)
+
     raise ValueError(f"Nieznany model: {config.model_name}")
 
 def run_experiment(config: ExperimentConfig):
@@ -102,12 +106,19 @@ def run_experiment(config: ExperimentConfig):
     prediction_frames = []
 
     for train_idx, test_idx in splitter.split(df):
+        train_idx = list(train_idx)
+        test_idx = list(test_idx)
+
+        if config.horizon > 1:
+            first_test_idx = min(test_idx)
+            max_allowed_train_idx = first_test_idx - config.horizon
+            train_idx = [idx for idx in train_idx if idx <= max_allowed_train_idx]
+
         train_df = df.loc[train_idx].copy()
         test_df = df.loc[test_idx].copy()
 
         model.fit(train_df)
         test_df["y_pred"] = model.predict(test_df)
-
         pred_part = test_df[["date", "close", "return", "y_true", "y_pred"]].copy()
         prediction_frames.append(pred_part)
 

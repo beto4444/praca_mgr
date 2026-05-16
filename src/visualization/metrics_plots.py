@@ -9,19 +9,53 @@ import pandas as pd
 
 PLOT_DIR = Path("results/plots")
 
+
 ASSET_COLOR_MAP = {
     "SPY": "tab:blue",
     "EURUSD": "tab:orange",
     "XAUUSD": "tab:green",
 }
 
-MODEL_MARKER_MAP = {
-    "historical_mean": "o",
-    "naive": "s",
-    "xgboost_lags_only": "^",
-    "xgboost_lags_rolling": "D",
-    "xgboost_none": "v",
+
+MODEL_BASE_LABELS = {
+    "historical_mean": "HME",
+    "naive": "NAV",
+    "ridge": "RID",
+    "xgboost": "XGB",
+    "arima": "ARI",
+    "lstm": "LSTM",
 }
+
+
+FEATURE_LABELS = {
+    "none": "",
+    "lags_only": "LAG",
+    "lags_rolling": "ROLL",
+}
+
+
+MODEL_MARKER_MAP = {
+    "HME": "o",
+    "NAV": "s",
+    "RID_LAG": "P",
+    "RID_ROLL": "X",
+    "XGB_LAG": "^",
+    "XGB_ROLL": "D",
+    "ARI": "v",
+    "LSTM": "*",
+}
+
+
+PREFERRED_MODEL_ORDER = [
+    "HME",
+    "NAV",
+    "RID_LAG",
+    "RID_ROLL",
+    "XGB_LAG",
+    "XGB_ROLL",
+    "ARI",
+    "LSTM",
+]
 
 
 def _ensure_output_dir(output_dir: Optional[str] = None) -> Path:
@@ -52,7 +86,8 @@ def _keep_latest_run_per_spec(df: pd.DataFrame) -> pd.DataFrame:
 
     out["__run_seq"] = out["run_id"].astype(str).apply(_extract_run_seq)
     out = out.sort_values(["spec_id", "__run_seq"]).drop_duplicates(
-        subset=["spec_id"], keep="last"
+        subset=["spec_id"],
+        keep="last",
     )
     out = out.drop(columns="__run_seq")
     return out
@@ -64,49 +99,59 @@ def _short_asset_name(asset: str) -> str:
     return str(asset)
 
 
+def _normalize_feature_set(feature_set) -> str:
+    if pd.isna(feature_set) or feature_set is None or feature_set == "":
+        return "none"
+    return str(feature_set)
+
+
 def _short_model_label(row: pd.Series) -> str:
     model = str(row["model"])
-    feature_set = row.get("feature_set_name", None)
+    feature_set = _normalize_feature_set(row.get("feature_set_name", "none"))
 
-    if model == "historical_mean":
-        return "HME"
-    if model == "naive":
-        return "NAV"
-    if model == "xgboost":
-        if feature_set == "lags_only":
-            return "XGB_LAG"
-        if feature_set == "lags_rolling":
-            return "XGB_ROLL"
-        return "XGB"
+    base_label = MODEL_BASE_LABELS.get(model, model.upper())
+    feature_label = FEATURE_LABELS.get(feature_set, feature_set.upper())
 
-    return model.upper()
+    # Benchmarki i modele bez cech nie potrzebują suffixu.
+    if model in {"historical_mean", "naive"}:
+        return base_label
 
+    if feature_label == "":
+        return base_label
 
-def _scatter_model_key(row: pd.Series) -> str:
-    model = str(row["model"])
-    feature_set = row.get("feature_set_name", None)
-
-    if model == "xgboost":
-        return f"xgboost_{feature_set}"
-    return model
+    return f"{base_label}_{feature_label}"
 
 
 def _build_plot_columns(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
+
+    out["feature_set_name"] = out["feature_set_name"].apply(_normalize_feature_set)
     out["model_label"] = out.apply(_short_model_label, axis=1)
-    out["asset_horizon"] = out["asset"].astype(str) + "_H" + out["horizon"].astype(str)
-    out["point_label"] = (
+
+    out["asset_horizon"] = (
         out["asset"].astype(str)
-        .map(lambda x: _short_asset_name(x))
+        + "_H"
+        + out["horizon"].astype(str)
+    )
+
+    out["point_label"] = (
+        out["asset"].astype(str).map(_short_asset_name)
         + "-H"
         + out["horizon"].astype(str)
         + " "
         + out["model_label"]
     )
+
     out["asset_color"] = out["asset"].map(ASSET_COLOR_MAP).fillna("tab:gray")
-    out["model_key"] = out.apply(_scatter_model_key, axis=1)
-    out["marker"] = out["model_key"].map(MODEL_MARKER_MAP).fillna("o")
+    out["marker"] = out["model_label"].map(MODEL_MARKER_MAP).fillna("o")
+
     return out
+
+
+def _order_columns(columns: pd.Index) -> list[str]:
+    ordered = [c for c in PREFERRED_MODEL_ORDER if c in columns]
+    remaining = [c for c in columns if c not in ordered]
+    return ordered + sorted(remaining)
 
 
 def _plot_heatmap_from_pivot(
@@ -115,7 +160,10 @@ def _plot_heatmap_from_pivot(
     output_path: Path,
     fmt: str = ".4f",
 ) -> None:
-    fig, ax = plt.subplots(figsize=(11, 6))
+    fig_width = max(11, 1.4 * len(pivot_df.columns))
+    fig_height = max(6, 0.6 * len(pivot_df.index))
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     values = pivot_df.values
     im = ax.imshow(values, aspect="auto")
@@ -130,7 +178,14 @@ def _plot_heatmap_from_pivot(
         for j in range(values.shape[1]):
             val = values[i, j]
             if pd.notna(val):
-                ax.text(j, i, format(val, fmt), ha="center", va="center", fontsize=8)
+                ax.text(
+                    j,
+                    i,
+                    format(val, fmt),
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                )
 
     ax.set_title(title)
     fig.colorbar(im, ax=ax)
@@ -165,11 +220,7 @@ def plot_metric_heatmap(
         aggfunc="first",
     )
 
-    # Ustal kolejność kolumn ręcznie, jeśli istnieją
-    preferred_columns = ["HME", "NAV", "XGB_LAG", "XGB_ROLL", "XGB"]
-    ordered_columns = [c for c in preferred_columns if c in pivot_df.columns]
-    remaining_columns = [c for c in pivot_df.columns if c not in ordered_columns]
-    pivot_df = pivot_df[ordered_columns + remaining_columns]
+    pivot_df = pivot_df[_order_columns(pivot_df.columns)]
 
     out_dir = _ensure_output_dir(output_dir)
     plot_title = title or f"Heatmap: {metric_col}"
@@ -191,7 +242,7 @@ def _select_points_to_annotate(
     bottom_n: int = 3,
 ) -> set[int]:
     if annotate_mode == "none":
-        return set(df.index)
+        return set()
 
     if annotate_mode == "all":
         return set(df.index)
@@ -204,6 +255,9 @@ def _select_points_to_annotate(
     if annotate_mode == "top_y":
         return set(df.nlargest(top_n, y_col).index)
 
+    if annotate_mode == "bottom_y":
+        return set(df.nsmallest(bottom_n, y_col).index)
+
     if annotate_mode == "extremes_xy":
         idx = set()
         idx.update(df.nlargest(top_n, y_col).index)
@@ -213,6 +267,48 @@ def _select_points_to_annotate(
         return idx
 
     raise ValueError(f"Nieznany annotate_mode: {annotate_mode}")
+
+
+def _build_asset_legend_handles() -> list:
+    handles = []
+
+    for asset, color in ASSET_COLOR_MAP.items():
+        handles.append(
+            plt.Line2D(
+                [0],
+                [0],
+                marker="o",
+                linestyle="",
+                label=asset,
+                markerfacecolor=color,
+                markeredgecolor=color,
+                markersize=8,
+            )
+        )
+
+    return handles
+
+
+def _build_model_legend_handles(df: pd.DataFrame) -> list:
+    handles = []
+
+    labels = _order_columns(pd.Index(df["model_label"].dropna().unique()))
+
+    for label in labels:
+        marker = MODEL_MARKER_MAP.get(label, "o")
+        handles.append(
+            plt.Line2D(
+                [0],
+                [0],
+                marker=marker,
+                linestyle="",
+                color="black",
+                label=label,
+                markersize=8,
+            )
+        )
+
+    return handles
 
 
 def plot_metric_scatter(
@@ -241,7 +337,6 @@ def plot_metric_scatter(
 
     fig, ax = plt.subplots(figsize=(10, 7))
 
-    # Rysujemy punkty osobno, żeby zachować kolory i markery
     for _, row in df.iterrows():
         ax.scatter(
             row[x_col],
@@ -262,7 +357,7 @@ def plot_metric_scatter(
     )
 
     for idx, row in df.iterrows():
-        if annotate_mode != "none" and idx in idx_to_annotate:
+        if idx in idx_to_annotate:
             ax.annotate(
                 row["point_label"],
                 (row[x_col], row[y_col]),
@@ -275,32 +370,18 @@ def plot_metric_scatter(
     ax.set_ylabel(y_col)
     ax.set_title(title or f"{y_col} vs {x_col}")
 
-    # Legenda: aktywa
-    asset_handles = []
-    for asset, color in ASSET_COLOR_MAP.items():
-        asset_handles.append(
-            plt.Line2D(
-                [0], [0],
-                marker="o",
-                linestyle="",
-                label=asset,
-                markerfacecolor=color,
-                markeredgecolor=color,
-                markersize=8,
-            )
-        )
-
-    # Legenda: modele
-    model_handles = [
-        plt.Line2D([0], [0], marker="o", linestyle="", color="black", label="HME", markersize=8),
-        plt.Line2D([0], [0], marker="s", linestyle="", color="black", label="NAV", markersize=8),
-        plt.Line2D([0], [0], marker="^", linestyle="", color="black", label="XGB_LAG", markersize=8),
-        plt.Line2D([0], [0], marker="D", linestyle="", color="black", label="XGB_ROLL", markersize=8),
-    ]
-
-    legend1 = ax.legend(handles=asset_handles, title="Asset", loc="upper left")
+    legend1 = ax.legend(
+        handles=_build_asset_legend_handles(),
+        title="Asset",
+        loc="upper left",
+    )
     ax.add_artist(legend1)
-    ax.legend(handles=model_handles, title="Model", loc="lower right")
+
+    ax.legend(
+        handles=_build_model_legend_handles(df),
+        title="Model",
+        loc="lower right",
+    )
 
     fig.tight_layout()
 

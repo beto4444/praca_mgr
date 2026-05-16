@@ -25,7 +25,33 @@ if __name__ == "__main__":
         feature_set_names=["none", "lags_only", "lags_rolling"],
         objective_names=[None, "mse"],
     )
+    plan = build_experiment_plan(
+        assets=["SPY"],
+        tasks=["regression_return"],
+        horizons=[1],
+        model_names=["arima"],
+        validation_name="walk_forward_expanding",
+        min_train_size=1260,
+        test_size=1,
+        step_size=1,
+        data_paths=data_paths,
+        feature_set_names=["none", "lags_only", "lags_rolling"],
+        objective_names=[None, "mse"],
+    )
 
+    plan = build_experiment_plan(
+        assets=["SPY", "EURUSD", "XAUUSD"],
+        tasks=["regression_return"],
+        horizons=[1, 3, 5],
+        model_names=["naive", "historical_mean", "xgboost", "ridge", "arima"],
+        validation_name="walk_forward_expanding",
+        min_train_size=1260,
+        test_size=1,
+        step_size=1,
+        data_paths=data_paths,
+        feature_set_names=["none", "lags_only", "lags_rolling"],
+        objective_names=[None, "mse"],
+    )
     print(f"Liczba eksperymentów w planie: {len(plan)}")
 
     for i, cfg in enumerate(plan, start=1):
